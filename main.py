@@ -12,6 +12,11 @@ from telebot import types
 load_dotenv()
 
 TOKEN = os.getenv("BOT_TOKEN")
+API_TOKEN = os.getenv("API_TOKEN")
+
+BASE_CITY = "Taganrog"
+BUTTONS=('Сегодня', 'На 5 дней')
+
 bot = telebot.TeleBot(TOKEN)
 
 # check if token provided
@@ -22,60 +27,47 @@ if len(TOKEN) == 0:
 
 @bot.message_handler(commands=['start'])
 def start_handler(message):
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    markup.add(types.InlineKeyboardButton('Current weather in Taganrog', callback_data="today"))
-    markup.add(types.InlineKeyboardButton('Weather of 5 days in Taganrog', callback_data="5days"))
-    bot.send_message(message.from_user.id, "Press buttons for interactions with bot", reply_markup=markup)
+    markup = types.ReplyKeyboardMarkup(row_width=2)
+    markup.row(types.KeyboardButton(BUTTONS[0]), types.KeyboardButton(BUTTONS[1]))
+    bot.send_message(message.from_user.id, "Для того что-бы использовать бота нажимайте интрактивные кнопки в меню", reply_markup=markup)
 
 
 
 # static data
 #
 fcToday = """
-Weather in Taganrog
+Погода в Таганроге на сегодня
 
 {text} ☁️
-☀ temperature: {weather} °C
-🌡 feels like: {feelslike_c} °C
-💧 humidity: {humidity} %
-📊 pressure: {pressure} hPa
-☁️ cloudiness: {cloudiness} %
-💨 wind: {wind} Km\h
+🌤 Температура: {weather} °C
+🌡Ощущается как: {feelslike_c} °C
+💧 Влажность воздуха: {humidity}%
+📊  Давление: {pressure} hPa
+☁️  Облачность: {cloudiness}%
+💨 Ветер: {wind} Км/ч
 
 """
 
 fcFiveDays = """
 📅 {date}:
 {text}
-🌡 Min: {mintemp_c} - Max: {maxtemp_c} °C 
+🌡 Минимальная: {mintemp_c} - Максимальная: {maxtemp_c} °C 
 """
 
 
-# format and send single forecast + menu
 def single_forecast(message):
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    todayBtn = types.InlineKeyboardButton('❮ 5 дней ❯', callback_data="today")
-    markup.add(todayBtn)
-    bot.send_message(message.from_user.id, fcToday, reply_markup=markup)
+    bot.send_message(message.from_user.id, str(Weather.get_current_weather(BASE_CITY, True)))
 
+def five_days_forecast(message):
+    bot.send_message(message.from_user.id, Weather.get_five_days_forecast(BASE_CITY, True))
 
 # handle all chat messages
 @bot.message_handler(content_types=['text'])
 def all_messages(message):
-    # user city like: Таганрог, Москва etc. 
-    single_forecast(message)
-
-
-# handle callback
-@bot.callback_query_handler(func=lambda call: True)
-def callback_query(call):
-    # if call.data == "today":
-    #     bot.send_message(call.message.chat.id, Template(fcFiveDays).render())
-    if call.data == "today":
-        bot.send_message(call.message.chat.id, str(Weather.get_current_weather("Taganrog", True)))
-    if call.data == "5days":
-        bot.send_message(call.message.chat.id, Weather.get_five_days_forcast("Taganrog", True))
-
+  if message.text == BUTTONS[0]:  
+      single_forecast(message)
+  elif message.text == BUTTONS[1]:
+      five_days_forecast(message)
 
 class Weather:
 
@@ -87,14 +79,13 @@ class Weather:
     '''
 
     @staticmethod
-    def get_five_days_forcast(city, convert_to_message=False, days=5):
+    def get_five_days_forecast(city, convert_to_message=False, days=5):
         """
         :return: Response of request if convert_to_message is False, either way a String with message
         """
 
         response = requests.get(f"http://api.weatherapi.com/v1/forecast.json?key=20a379ec62ae4772885101451222011&q={city}&days={days}&aqi=no&alerts=no&lang=ru")
         response_dict: dict = json.loads(response.content)
-        print(response_dict)
         if convert_to_message:
             message = ""
 
@@ -111,8 +102,6 @@ class Weather:
 
         response = requests.get(f"http://api.weatherapi.com/v1/current.json?key=20a379ec62ae4772885101451222011&q={city}&aqi=no&lang=ru")
         response_dict: dict = json.loads(response.content)
-        print(response_dict)
-
 
         if convert_to_message:
             return fcToday.format(weather=response_dict.get("current").get("temp_c"), feelslike_c=response_dict.get("current").get("feelslike_c"), humidity=response_dict.get("current").get("humidity"), pressure=response_dict.get("current").get("pressure_mb"),
